@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-""" Use of regex in replacing occurrences of certain field values """
+"""
+    RedactingFormatter
+"""
+import csv
+import logging
+import os
 import re
 from typing import List
-import logging
 import mysql.connector
-import os
+
+PII_FIELDS = ("name", "email", "phone", "ssn", "password")
 
 
 class RedactingFormatter(logging.Formatter):
@@ -16,75 +21,60 @@ class RedactingFormatter(logging.Formatter):
     SEPARATOR = ";"
 
     def __init__(self, fields: List[str]):
+        """ init """
         super(RedactingFormatter, self).__init__(self.FORMAT)
         self.fields = fields
 
     def format(self, record: logging.LogRecord) -> str:
-        """ Returns filtered values from log records """
+        """ format record """
         return filter_datum(self.fields, self.REDACTION,
-                            super().format(record), self.SEPARATOR)
-
-
-PII_FIELDS = ("name", "email", "password", "ssn", "phone")
-
-
-def get_db() -> mysql.connector.connection.MYSQLConnection:
-    """ Connection to MySQL environment """
-    db_connect = mysql.connector.connect(
-        user=os.getenv('PERSONAL_DATA_DB_USERNAME', 'root'),
-        password=os.getenv('PERSONAL_DATA_DB_PASSWORD', ''),
-        host=os.getenv('PERSONAL_DATA_DB_HOST', 'localhost'),
-        database=os.getenv('PERSONAL_DATA_DB_NAME')
-    )
-    return db_connect
+                            super(RedactingFormatter, self).format(record),
+                            self.SEPARATOR)
 
 
 def filter_datum(fields: List[str], redaction: str, message: str,
                  separator: str) -> str:
-    """ Returns regex obfuscated log messages """
-    for field in fields:
-        message = re.sub(f'{field}=(.*?){separator}',
-                         f'{field}={redaction}{separator}', message)
-    return message
+    """ returns the log message obfuscated """
+    return re.sub(r"(\w+)=([a-zA-Z0-9@\.\-\(\)\ \:\^\<\>\~\$\%\@\?\!\/]*)",
+                  lambda match: match.group(1) + "=" + redaction
+                  if match.group(1) in fields else match.group(0), message)
 
 
 def get_logger() -> logging.Logger:
-    """ Returns a logging.Logger object """
-    logger = logging.getLogger("user_data")
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    target_handler = logging.StreamHandler()
-    target_handler.setLevel(logging.INFO)
-
-    formatter = RedactingFormatter(list(PII_FIELDS))
-    target_handle.setFormatter(formatter)
-
-    logger.addHandler(target_handler)
-    return logger
+    """ return a logger object """
+    lg = logging.getLogger("user_data")
+    lg.setLevel(logging.INFO)
+    lg.propagate = False
+    sh = logging.StreamHandler()
+    sh.setFormatter(RedactingFormatter(PII_FIELDS))
+    lg.addHandler(sh)
+    return lg
 
 
-def main() -> None:
-    """ Obtain database connection using get_db
-    retrieve all role in the users table and display
-    each row under a filtered format
+def get_db() -> mysql.connector.connection.MySQLConnection:
+    """ connect to MySQL database """
+    return mysql.connector.connect(
+        host=os.getenv("PERSONAL_DATA_DB_HOST", "root"),
+        database=os.getenv("PERSONAL_DATA_DB_NAME"),
+        user=os.getenv("PERSONAL_DATA_DB_USERNAME", "localhost"),
+        password=os.getenv("PERSONAL_DATA_DB_PASSWORD", ""),
+    )
+
+
+def main():
     """
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users;")
-
-    headers = [field[0] for field in cursor.description]
+    main function
+    """
+    con = get_db()
+    users = con.cursor()
+    users.execute("SELECT CONCAT('name=', name, ';ssn=', ssn, ';ip=', ip, \
+        ';user_agent', user_agent, ';') AS message FROM users;")
+    formatter = RedactingFormatter(fields=PII_FIELDS)
     logger = get_logger()
 
-    for row in cursor:
-        info_answer = ''
-        for f, p in zip(row, headers):
-            info_answer += f'{p}={(f)}; '
-        logger.info(info_answer)
-
-    cursor.close()
-    db.close()
+    for user in users:
+        logger.log(logging.INFO, user[0])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
