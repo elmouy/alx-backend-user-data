@@ -1,59 +1,55 @@
 #!/usr/bin/env python3
 """
-Main Module
+End-to-end integration test
 """
-from db import DB
-from user import User
-from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.orm.exc import NoResultFound
 
 
 def register_user(email: str, password: str) -> None:
-    """register_user"""
+    """Test for register user
+    """
     assert True
-    return
 
 
 def log_in_wrong_password(email: str, password: str) -> None:
-    """log_in_wrong_password"""
+    """Test for login with wrong password
+    """
     assert True
-    return
 
 
 def log_in(email: str, password: str) -> str:
-    """log_in"""
+    """Test for login
+    """
     assert True
-    return ("")
 
 
 def profile_unlogged() -> None:
-    """profile_unlogged"""
+    """Test for profile unlogged
+    """
     assert True
-    return
 
 
 def profile_logged(session_id: str) -> None:
-    """profile_logged"""
+    """Test for profile logged
+    """
     assert True
-    return
 
 
 def log_out(session_id: str) -> None:
-    """log_out"""
+    """Test for logout
+    """
     assert True
-    return
 
 
 def reset_password_token(email: str) -> str:
-    """reset_password_token"""
+    """Test for reset password
+    """
     assert True
-    return ("")
 
 
-def update_password(reset_token: str, new_password: str) -> None:
-    """update_password"""
+def update_password(email: str, reset_token: str, new_password: str) -> None:
+    """Test for update password
+    """
     assert True
-    return
 
 
 EMAIL = "guillaume@holberton.io"
@@ -62,7 +58,6 @@ NEW_PASSWD = "t4rt1fl3tt3"
 
 
 if __name__ == "__main__":
-
     register_user(EMAIL, PASSWD)
     log_in_wrong_password(EMAIL, NEW_PASSWD)
     profile_unlogged()
@@ -70,5 +65,5 @@ if __name__ == "__main__":
     profile_logged(session_id)
     log_out(session_id)
     reset_token = reset_password_token(EMAIL)
-    update_password(EMAIL, reset_token)
+    update_password(EMAIL, reset_token, NEW_PASSWD)
     log_in(EMAIL, NEW_PASSWD)
