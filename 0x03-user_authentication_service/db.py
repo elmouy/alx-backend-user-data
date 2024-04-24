@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""DB Module
+"""DB module.
 """
-
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, tuple_
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy.exc import InvalidRequestError
+from sqlalchemy.orm.session import Session
+
 from user import Base, User
 
 
 class DB:
-    """DB class
+    """DB class.
     """
 
-    def __init__(self):
-        """Initializes a new DB instance
+    def __init__(self) -> None:
+        """Initialize a new DB instance.
         """
         self._engine = create_engine("sqlite:///a.db", echo=False)
         Base.metadata.drop_all(self._engine)
@@ -23,9 +24,8 @@ class DB:
         self.__session = None
 
     @property
-    def _session(self):
-        """Private memoized session method (object)
-        Never used outside DB class
+    def _session(self) -> Session:
+        """Memoized session object.
         """
         if self.__session is None:
             DBSession = sessionmaker(bind=self._engine)
@@ -33,41 +33,48 @@ class DB:
         return self.__session
 
     def add_user(self, email: str, hashed_password: str) -> User:
-        """Add new user to database
-        Returns a User object
+        """Adds a new user to the database.
         """
-        user = User(email=email, hashed_password=hashed_password)
-        self._session.add(user)
-        self._session.commit()
-        return user
+        try:
+            new_user = User(email=email, hashed_password=hashed_password)
+            self._session.add(new_user)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            new_user = None
+        return new_user
 
     def find_user_by(self, **kwargs) -> User:
-        """Returns first rrow found in users table
-        as filtered by methods input arguments
+        """Finds a user based on a set of filters.
         """
-        user_keys = ['id', 'email', 'hashed_password', 'session_id',
-                     'reset_token']
-        for key in kwargs.keys():
-            if key not in user_keys:
-                raise InvalidRequestError
-        result = self._session.query(User).filter_by(**kwargs).first()
+        fields, values = [], []
+        for key, value in kwargs.items():
+            if hasattr(User, key):
+                fields.append(getattr(User, key))
+                values.append(value)
+            else:
+                raise InvalidRequestError()
+        result = self._session.query(User).filter(
+            tuple_(*fields).in_([tuple(values)])
+        ).first()
         if result is None:
-            raise NoResultFound
+            raise NoResultFound()
         return result
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """Use find_user_by to locate the user to update
-        Update user's attribute as passed in methods argument
-        Commit changes to database
-        Raises ValueError if argument does not correspond to user
-        attribute passed
+        """Updates a user based on a given id.
         """
-        user_to_update = self.find_user_by(id=user_id)
-        user_keys = ['id', 'email', 'hashed_password', 'session_id',
-                     'reset_token']
+        user = self.find_user_by(id=user_id)
+        if user is None:
+            return
+        update_source = {}
         for key, value in kwargs.items():
-            if key in user_keys:
-                setattr(user_to_update, key, value)
+            if hasattr(User, key):
+                update_source[getattr(User, key)] = value
             else:
-                raise ValueError
+                raise ValueError()
+        self._session.query(User).filter(User.id == user_id).update(
+            update_source,
+            synchronize_session=False,
+        )
         self._session.commit()
